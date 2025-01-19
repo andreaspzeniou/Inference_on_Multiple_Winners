@@ -1,0 +1,113 @@
+---
+title: "Neighborhood_Effects_Applications"
+author: "Andreas Petrou-Zeniou"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(quantreg)
+library(haven)
+library(readstata13)
+library(fastDummies)
+library(matrixcalc)
+```
+
+```{r}
+
+df <- read.csv("Input_Data/tract_outcomes_simple.csv")
+
+```
+
+```{r}
+
+df <- df %>% filter(czname == "Cleveland", county == 35, tract <= 124600) %>%
+  select(c(tract, kfr_pooled_pooled_p25, kfr_pooled_pooled_p25_se, pooled_pooled_count)) %>%
+  mutate(kfr_pooled_pooled_p25_var = kfr_pooled_pooled_p25_se ^ 2) %>%
+  select(c(tract, kfr_pooled_pooled_p25, kfr_pooled_pooled_p25_var, pooled_pooled_count))
+
+```
+
+```{r}
+
+X <- df %>% select(kfr_pooled_pooled_p25) %>% as.matrix()
+
+```
+
+
+```{r}
+
+Sd <- as.matrix(df$kfr_pooled_pooled_p25_var)
+S <- matrix(0, nrow(df), nrow(df))
+
+diag(S) <- Sd
+
+```
+
+```{r}
+
+df_voucher <- read.csv("Input_Data/Housing_Choice_Vouchers_by_Tract.csv")
+
+```
+
+```{r}
+
+df_voucher <- df_voucher %>% 
+  filter(STATE == 39, COUNTY == 35, TRACT <= 124600) %>% 
+  rename(tract = TRACT) %>%
+  rename(voucher_rec = HCV_PUBLIC) %>% 
+  select(c(tract, voucher_rec))
+
+df <- left_join(df, df_voucher)
+
+```
+
+First, normalize everything by the voucher-recipient-weighted mean of neighborhood effects
+
+```{r}
+
+df <- df %>% mutate(voucher_rec = ifelse(is.na(voucher_rec),0,voucher_rec))
+
+N <- nrow(df)
+
+pop <- sum(df$voucher_rec)
+df <- df %>% mutate(voucher_rec = voucher_rec / pop)
+
+id_matrix <- as.vector(-1 * df$voucher_rec)
+
+for (row in (2:N)) {
+  temp <- id_matrix
+  id_matrix <- rbind(temp, as.vector(-1 * df$voucher_rec))
+}
+
+diag(id_matrix) <- diag(id_matrix) + 1
+
+```
+
+```{r}
+
+S <- id_matrix %*% S %*% t(id_matrix)
+X <- id_matrix %*% X
+
+```
+
+```{r}
+
+write.csv(S, "Input_Data_Processed_Urban/Sigma_quantiles_neighborhood_Cleveland_urban.csv")
+write.csv(X, "Input_Data_Processed_Urban/X_quantiles_neighborhood_Cleveland_urban.csv")
+write.csv(X, "Input_Data_Processed_Urban/Y_quantiles_neighborhood_Cleveland_urban.csv")
+
+```
+
+
+
+
+
+
