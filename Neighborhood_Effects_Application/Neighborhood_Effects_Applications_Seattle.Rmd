@@ -29,9 +29,35 @@ df <- read.csv("Input_Data/tract_outcomes_simple.csv")
 ```{r}
 
 df <- df %>% filter(czname == "Seattle", county == 33, tract <= 12100) %>%
-  select(c(tract, kfr_pooled_pooled_p25, kfr_pooled_pooled_p25_se, pooled_pooled_count)) %>%
-  mutate(kfr_pooled_pooled_p25_var = kfr_pooled_pooled_p25_se ^ 2) %>%
-  select(c(tract, kfr_pooled_pooled_p25, kfr_pooled_pooled_p25_var, pooled_pooled_count))
+  select(c(tract, 
+           kfr_pooled_pooled_p25, 
+           kfr_pooled_pooled_p25_se,
+           kfr_black_pooled_p25,
+           kfr_black_pooled_p25_se,
+           kfr_white_pooled_p25,
+           kfr_white_pooled_p25_se,
+           kfr_pooled_male_p25,
+           kfr_pooled_male_p25_se,
+           kfr_pooled_female_p25,
+           kfr_pooled_female_p25_se,
+           pooled_pooled_count)) %>%
+  mutate(kfr_pooled_pooled_p25_var = kfr_pooled_pooled_p25_se ^ 2,
+         kfr_black_pooled_p25_var = kfr_black_pooled_p25_se ^ 2,
+         kfr_white_pooled_p25_var = kfr_white_pooled_p25_se ^ 2,
+         kfr_pooled_male_p25_var = kfr_pooled_male_p25_se ^ 2,
+         kfr_pooled_female_p25_var = kfr_pooled_female_p25_se ^ 2) %>%
+  select(c(tract, 
+           kfr_pooled_pooled_p25, 
+           kfr_pooled_pooled_p25_var, 
+           kfr_black_pooled_p25,
+           kfr_black_pooled_p25_var,
+           kfr_white_pooled_p25,
+           kfr_white_pooled_p25_var,
+           kfr_pooled_male_p25,
+           kfr_pooled_male_p25_var,
+           kfr_pooled_female_p25,
+           kfr_pooled_female_p25_var,
+           pooled_pooled_count))
 
 ```
 
@@ -43,15 +69,31 @@ df <- df %>% filter(czname == "Seattle", county == 33, tract <= 12100) %>%
 
 ```{r}
 
-X <- df %>% select(kfr_pooled_pooled_p25) %>% as.matrix()
+df[is.na(df)] <- 0
+
+```
+
+```{r}
+
+X <- df %>% select(kfr_pooled_pooled_p25,
+                   kfr_black_pooled_p25,
+                   kfr_white_pooled_p25,
+                   kfr_pooled_male_p25,
+                   kfr_pooled_female_p25) %>% as.matrix()
+
+X <- as.matrix(c(X[,1], X[,2], X[,3], X[,4], X[,5]))
 
 ```
 
 
 ```{r}
 
-Sd <- as.matrix(df$kfr_pooled_pooled_p25_var)
-S <- matrix(0, nrow(df), nrow(df))
+Sd <- as.matrix(c(df$kfr_pooled_pooled_p25_var,
+                  df$kfr_black_pooled_p25_var,
+                  df$kfr_white_pooled_p25_var,
+                  df$kfr_pooled_male_p25_var,
+                  df$kfr_pooled_female_p25_var))
+S <- matrix(0, nrow(df) * 5, nrow(df) * 5)
 
 diag(S) <- Sd
 
@@ -84,14 +126,66 @@ df <- df %>% mutate(voucher_rec = ifelse(is.na(voucher_rec),0,voucher_rec))
 N <- nrow(df)
 
 pop <- sum(df$voucher_rec)
+
+```
+
+```{r}
+
+avg <- sum(df$kfr_pooled_pooled_p25 * df$voucher_rec) / pop
+
+```
+
+```{r}
+
+avg
+
+length(df$kfr_pooled_pooled_p25[df$kfr_pooled_pooled_p25 > avg]) / nrow(df)
+length(df$kfr_pooled_pooled_p25[df$kfr_pooled_pooled_p25 < avg]) / nrow(df)
+
+```
+
+```{r}
+
 df <- df %>% mutate(voucher_rec = voucher_rec / pop)
 
-id_matrix <- as.vector(-1 * df$voucher_rec)
+id_matrix <- c(as.vector(-1 * df$voucher_rec), rep(0, N * 4))
 
 for (row in (2:N)) {
   temp <- id_matrix
-  id_matrix <- rbind(temp, as.vector(-1 * df$voucher_rec))
+  id_matrix <- rbind(temp, c(as.vector(-1 * df$voucher_rec), rep(0, N * 4)))
 }
+
+row_append <- c(rep(0, N), as.vector(-1 * df$voucher_rec), rep(0, N * 3))
+
+for (row in (1:N)) {
+  temp <- id_matrix
+  id_matrix <- rbind(temp, row_append)
+}
+
+row_append <- c(rep(0, 2*N), as.vector(-1 * df$voucher_rec), rep(0, N*2))
+
+for (row in (1:N)) {
+  temp <- id_matrix
+  id_matrix <- rbind(temp, row_append)
+}
+
+row_append <- c(rep(0, 3*N), as.vector(-1 * df$voucher_rec), rep(0, N))
+
+for (row in (1:N)) {
+  temp <- id_matrix
+  id_matrix <- rbind(temp, row_append)
+}
+
+row_append <- c(rep(0, 4*N), as.vector(-1 * df$voucher_rec))
+
+for (row in (1:N)) {
+  temp <- id_matrix
+  id_matrix <- rbind(temp, row_append)
+}
+
+```
+
+```{r}
 
 diag(id_matrix) <- diag(id_matrix) + 1
 
@@ -106,9 +200,9 @@ X <- id_matrix %*% X
 
 ```{r}
 
-write.csv(S, "Input_Data_Processed_Urban/Sigma_quantiles_neighborhood_Seattle_urban.csv")
-write.csv(X, "Input_Data_Processed_Urban/X_quantiles_neighborhood_Seattle_urban.csv")
-write.csv(X, "Input_Data_Processed_Urban/Y_quantiles_neighborhood_Seattle_urban.csv")
+write.csv(S, "Input_Data_Processed_Urban/Sigma_quantiles_neighborhood_Seattle_urban_extended.csv")
+write.csv(X, "Input_Data_Processed_Urban/X_quantiles_neighborhood_Seattle_urban_extended.csv")
+write.csv(X, "Input_Data_Processed_Urban/Y_quantiles_neighborhood_Seattle_urban_extended.csv")
 
 ```
 

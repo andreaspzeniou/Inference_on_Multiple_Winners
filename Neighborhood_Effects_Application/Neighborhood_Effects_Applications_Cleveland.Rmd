@@ -78,6 +78,25 @@ df <- df %>% mutate(voucher_rec = ifelse(is.na(voucher_rec),0,voucher_rec))
 N <- nrow(df)
 
 pop <- sum(df$voucher_rec)
+
+```
+
+```{r}
+
+avg <- sum(df$kfr_pooled_pooled_p25 * df$voucher_rec) / pop
+
+```
+
+```{r}
+
+avg
+
+length(df$kfr_pooled_pooled_p25[df$kfr_pooled_pooled_p25 > avg]) / nrow(df)
+length(df$kfr_pooled_pooled_p25[df$kfr_pooled_pooled_p25 < avg]) / nrow(df)
+
+```
+
+```{r}
 df <- df %>% mutate(voucher_rec = voucher_rec / pop)
 
 id_matrix <- as.vector(-1 * df$voucher_rec)

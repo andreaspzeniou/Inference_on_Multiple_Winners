@@ -1,0 +1,115 @@
+---
+title: "neighborhood_effects_application_processing_full"
+author: "Andreas Petrou-Zeniou"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+cz_list <- c("Port St. Lucie", "Chicago", "Philadelphia", "New York", "Newark", "Milwaukee", "Atlanta", "St. Louis", "Cleveland", "Miami", "Detroit", "Pittsburgh", "Columbus", "Bridgeport", "Dallas", "Washington DC", "Austin", "Raleigh", "Cincinnati", "Charlotte", "Kansas City", "New Orleans", "Nashville", "Baltimore", "Buffalo", "Indianapolis", "Grand Rapids", "Dayton", "San Francisco", "Tampa", "Salt Lake City", "Boston", "Houston", "Phoenix", "Minneapolis", "Denver", "Los Angeles", "Jacksonville", "Fort Worth", "San Antonio", "Orlando", "San Jose", "Sacramento", "San Diego", "Manchester", "Providence", "Fresno", "Las Vegas", "Portland", "Seattle")
+
+```
+
+```{r}
+
+results_mat <- c("CZ", 
+                 "two step fail", 
+                 "two step asymmetric fail",
+                 "projection fail",
+                 "two step length",
+                 "two step asymmetric length",
+                 "projection length")
+
+results_mat <- t(as.matrix(results_mat))
+
+for (cz in cz_list) {
+  
+  two_step <- read.csv(paste0("All_CIs/TwoStep_",cz,".csv"))
+  two_step_a <- read.csv(paste0("All_CIs/TwoStepAsymmetric_",cz,".csv"))
+  proj <- read.csv(paste0("All_CIs/Projection_",cz,".csv"))
+  
+  two_step$X0[two_step$X0 < proj$X0] <- proj$X0[two_step$X0 < proj$X0]
+  two_step$X1[two_step$X1 > proj$X1] <- proj$X1[two_step$X1 > proj$X1]
+  
+  N <- nrow(proj)
+  
+  if (cz == "Dayton") {
+    print("Dayton")
+    print(length(two_step$X0[two_step$X0 < 0]))
+    print(length(proj$X0[proj$X0 < 0]))
+  }
+  
+  if (cz == "Los Angeles") {
+    print("Los Angeles")
+    print(length(two_step$X0[two_step$X0 < 0]))
+    print(length(proj$X0[proj$X0 < 0]))
+  }
+  
+  row <- c(cz, 
+           length(two_step$X0[two_step$X0 < 0]) / N, 
+           length(two_step_a$X0[two_step_a$X0 < 0]) / N,
+           length(proj$X0[proj$X0 < 0]) / N,
+           mean(two_step$X1 - two_step$X0),
+           mean(two_step_a$X1 - two_step_a$X0),
+           mean(proj$X1 - proj$X0))
+  
+  results_mat <- rbind(results_mat, t(as.matrix(row)))
+  
+}
+
+```
+
+```{r}
+
+results <- data.frame(results_mat[2:nrow(results_mat),])
+colnames(results) <- results_mat[1,]
+
+results$`two step fail` <- as.numeric(results$`two step fail`)
+results$`projection fail` <- as.numeric(results$`projection fail`)
+results$`two step asymmetric fail` <- as.numeric(results$`two step asymmetric fail`)
+
+results$`two step length` <- as.numeric(results$`two step length`)
+results$`projection length` <- as.numeric(results$`projection length`)
+results$`two step asymmetric length` <- as.numeric(results$`two step asymmetric length`)
+
+results$less_rejections <- (results$`two step fail` - results$`projection fail`) / results$`projection fail`
+results$less_rejections_asymmetric <- (results$`two step asymmetric fail` - results$`projection fail`) / results$`projection fail`
+
+results$length_improvements <- (results$`two step length` - results$`projection length`) / results$`projection length`
+results$length_improvements_asymmetric <- (results$`two step asymmetric length` - results$`projection length`) / results$`projection length`
+
+```
+
+```{r}
+
+library(tidyverse)
+library(reshape2)
+
+```
+
+```{r}
+
+results_restricted <- melt(results[,c('CZ','two step fail','projection fail')],id.vars = 1)
+
+p <- ggplot(results_restricted,aes(x = reorder(CZ, value),y = value)) + 
+    geom_bar(aes(fill = variable),stat = "identity",position = "dodge", width = 0.6) +
+    xlab("Commuting Zone") +
+    ylab("Proportion Failed to Reject") +
+    theme(axis.text.y = element_text(size = 8, hjust = 1),
+          aspect.ratio = 2/1) +
+    coord_flip()
+
+print(p)
+
+ggsave("Figures/CZ_vs_fail_to_reject.png", plot = p, width = 6, height = 8, units = "in")
+
+```
+
+
+
+

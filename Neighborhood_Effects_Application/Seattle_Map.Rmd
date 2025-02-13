@@ -1,0 +1,269 @@
+---
+title: "Seattle_Map"
+author: "Andreas Petrou-Zeniou"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(tidyr)
+library(dplyr)
+library(quantreg)
+library(haven)
+library(readstata13)
+library(fastDummies)
+library(matrixcalc)
+library(kit)
+library(censable)
+library(tmap)
+library(sf)
+library(mapview)
+library(tidycensus)
+```
+
+```{r}
+
+df <- read.csv("Input_Data/tract_outcomes_simple.csv")
+
+```
+
+```{r}
+
+df <- df %>% filter(czname == "Seattle", county == 33, tract <= 12100) %>%
+  select(c(tract, kfr_pooled_pooled_p25, kfr_pooled_pooled_p25_se, pooled_pooled_count)) %>%
+  mutate(kfr_pooled_pooled_p25_var = kfr_pooled_pooled_p25_se ^ 2) %>%
+  select(c(tract, kfr_pooled_pooled_p25, kfr_pooled_pooled_p25_var, pooled_pooled_count))
+
+n_15 <- floor(nrow(df) / 5)
+
+```
+
+```{r}
+
+df_CI <- read.csv("Urban_CIs/CI_Seattle.csv")
+
+```
+
+```{r}
+
+df_CI <- df_CI %>% select(c(X0, X1)) %>% rename(lower = X0, upper = X1)
+
+```
+
+```{r}
+
+df <- df %>% mutate(lower = NA, upper = NA)
+
+for (i in (1:nrow(df_CI))) {
+  
+  row <- kit::topn(df$kfr_pooled_pooled_p25, i, decreasing = T)[i]
+  df$lower[row] <- df_CI$lower[i]
+  df$upper[row] <- df_CI$upper[i]
+  
+}
+
+```
+
+```{r}
+
+df$state = 530
+df$county = 330
+df <- df %>% mutate(county = ifelse(tract < 10000, county * 10, county))
+df <- df %>% mutate(county = ifelse(tract < 1000, county * 10, county))
+
+df <- df %>% construct_geoid("tract", 
+                                   state = state,
+                                   county = county,
+                                   tract = tract)
+
+```
+
+```{r}
+
+df_acs <- get_acs(geography = "tract", 
+              year = 2018,
+              variables = c(tpopr = "B03002_001", 
+                            nhwhite = "B03002_003", nhblk = "B03002_004", 
+                            nhasn = "B03002_006", hisp = "B03002_012"), 
+              state = "WA",
+              output = "wide",
+              survey = "acs5",
+              geometry = TRUE,
+              cb = FALSE)
+
+```
+
+```{r}
+
+df_acs <- df_acs %>% select(c(GEOID, geometry))
+
+df <- left_join(df, df_acs)
+
+```
+
+```{r}
+
+df <- st_as_sf(df)
+
+```
+
+```{r}
+
+tm_shape(df) + 
+  tm_polygons(col = "lower",
+          style = "fixed",
+          breaks = c(seq(-0.25, 0.05, by = 0.05)),
+          auto.palette.mapping = TRUE,
+          palette = "-Reds",
+          title = "Lower Confidence Bounds",
+          textNA = "",
+          colorNA = NULL) + 
+  tm_layout(frame = FALSE,
+            legend.outside = TRUE)
+
+```
+
+```{r}
+
+tm_shape(df) + 
+  tm_polygons(col = "upper",
+          style = "fixed",
+          breaks = c(seq(0.1, 0.45, by = 0.05)),
+          auto.palette.mapping = FALSE,
+          palette = "Greens",
+          title = "Upper Confidence Bounds",
+          textNA = "",
+          colorNA = NULL) + 
+  tm_layout(frame = FALSE,
+            legend.outside = TRUE)
+
+```
+
+
+```{r}
+
+df <- read.csv("Input_Data/tract_outcomes_simple.csv")
+
+```
+
+```{r}
+
+df <- df %>% filter(czname == "Seattle", county == 33, tract <= 12100) %>%
+  select(c(tract, kfr_pooled_pooled_p25, kfr_pooled_pooled_p25_se, pooled_pooled_count)) %>%
+  mutate(kfr_pooled_pooled_p25_var = kfr_pooled_pooled_p25_se ^ 2) %>%
+  select(c(tract, kfr_pooled_pooled_p25, kfr_pooled_pooled_p25_var, pooled_pooled_count))
+
+n_15 <- floor(nrow(df) / 5)
+
+```
+
+```{r}
+
+df_CI <- read.csv("Urban_CIs/CI_Seattle_pairs_two_step.csv")
+
+```
+
+```{r}
+
+df_CI <- df_CI %>% select(c(X0, X1)) %>% rename(lower = X0, upper = X1)
+
+```
+
+```{r}
+
+df <- df %>% mutate(lower = NA, upper = NA)
+
+for (i in (1:nrow(df_CI))) {
+  
+  row <- kit::topn(df$kfr_pooled_pooled_p25, i, decreasing = T)[i]
+  df$lower[row] <- df_CI$lower[i]
+  df$upper[row] <- df_CI$upper[i]
+  
+}
+
+```
+
+```{r}
+
+df$state = 530
+df$county = 330
+df <- df %>% mutate(county = ifelse(tract < 10000, county * 10, county))
+df <- df %>% mutate(county = ifelse(tract < 1000, county * 10, county))
+
+df <- df %>% construct_geoid("tract", 
+                                   state = state,
+                                   county = county,
+                                   tract = tract)
+
+```
+
+```{r}
+
+df_acs <- get_acs(geography = "tract", 
+              year = 2018,
+              variables = c(tpopr = "B03002_001", 
+                            nhwhite = "B03002_003", nhblk = "B03002_004", 
+                            nhasn = "B03002_006", hisp = "B03002_012"), 
+              state = "WA",
+              output = "wide",
+              survey = "acs5",
+              geometry = TRUE,
+              cb = FALSE)
+
+```
+
+```{r}
+
+df_acs <- df_acs %>% select(c(GEOID, geometry))
+
+df <- left_join(df, df_acs)
+
+```
+
+```{r}
+
+df <- st_as_sf(df)
+
+```
+
+```{r}
+
+tm_shape(df) + 
+  tm_polygons(col = "lower",
+          style = "fixed",
+          breaks = c(seq(-0.3, -0.05, by = 0.05)),
+          auto.palette.mapping = TRUE,
+          palette = "-Reds",
+          title = "Lower Confidence Bounds",
+          textNA = "",
+          colorNA = NULL) + 
+  tm_layout(frame = FALSE,
+            legend.outside = TRUE)
+
+```
+
+```{r}
+
+tm_shape(df) + 
+  tm_polygons(col = "upper",
+          style = "fixed",
+          breaks = c(seq(0.5, 0.75, by = 0.05)),
+          auto.palette.mapping = FALSE,
+          palette = "Greens",
+          title = "Upper Confidence Bounds",
+          textNA = "",
+          colorNA = NULL) + 
+  tm_layout(frame = FALSE,
+            legend.outside = TRUE)
+
+```
+
+
+
+
+
